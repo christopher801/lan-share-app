@@ -103,14 +103,14 @@ lan-share-app/
 
 ```bash
 # Klone repo a
-git clone https://github.com/TON-USERNAME/lan-share.git
+git clone https://github.com/christopher801/lan-share-app.git
 cd lan-share
 
 # Enstale depandans
 npm install
 
 # Jenere logo ak icons
-node generate-assets.js
+node icons.js
 
 # Lanse app la
 npm start
@@ -120,7 +120,7 @@ npm start
 
 ```bash
 npm install canvas
-node generate-assets.js
+node icons.js
 ```
 
 ---
@@ -228,4 +228,4 @@ git push origin feature/non-fonksyon
 
 ## 📄 Lisans
 
-[MIT](LICENSE) © 2025 LAN Share
+[MIT](LICENSE) © 2026 LAN Share app
