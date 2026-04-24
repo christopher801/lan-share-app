@@ -1,49 +1,33 @@
 /**
- * discovery.js
- * UDP broadcast discovery — finds other LAN Share peers on the local network.
- *
- * Protocol:
- *   Every peer broadcasts a JSON beacon every BROADCAST_INTERVAL ms on
- *   UDP port DISCOVERY_PORT (bound to 0.0.0.0 to receive broadcasts too).
- *
- *   Beacon format:
- *   { type: 'LANSHARE_BEACON', id, name, tcpPort, platform, version }
- *
- *   Any peer that receives a beacon (from a different id) adds/updates it
- *   in the device registry and emits 'device-found' or 'device-updated'.
- *
- *   Devices that haven't sent a beacon for TIMEOUT_MS are considered gone
- *   and 'device-lost' is emitted.
+ * discovery.js — FIXED VERSION
+ * Timeout 30s + multi-interface broadcast (fix Windows Firewall)
  */
 
-const dgram    = require('dgram');
-const os       = require('os');
+const dgram        = require('dgram');
+const os           = require('os');
 const EventEmitter = require('events');
 const { generateSessionId } = require('./encryption');
 
-const DISCOVERY_PORT     = 45678;       // UDP port for discovery beacons
+const DISCOVERY_PORT     = 45678;
 const BROADCAST_ADDR     = '255.255.255.255';
-const BROADCAST_INTERVAL = 3_000;       // ms between beacons
-const TIMEOUT_MS         = 10_000;      // ms before a device is considered lost
+const BROADCAST_INTERVAL = 3_000;
+const TIMEOUT_MS         = 30_000;   // ← 10_000 → 30_000
 const APP_VERSION        = '1.0.0';
 
 class Discovery extends EventEmitter {
   constructor(deviceName, tcpPort) {
     super();
-
-    this.id       = generateSessionId();          // unique per app launch
-    this.name     = deviceName || _defaultName(); // human-readable label
+    this.id       = generateSessionId();
+    this.name     = deviceName || _defaultName();
     this.tcpPort  = tcpPort;
     this.platform = process.platform;
-
-    this.devices  = new Map();  // id → { id, name, address, tcpPort, platform, lastSeen }
+    this.devices  = new Map();
     this.socket   = null;
     this._broadcastTimer = null;
     this._cleanupTimer   = null;
     this.running  = false;
   }
 
-  /** Start listening + broadcasting */
   start() {
     if (this.running) return;
     this.running = true;
@@ -71,7 +55,6 @@ class Discovery extends EventEmitter {
     });
   }
 
-  /** Stop everything */
   stop() {
     this.running = false;
     clearInterval(this._broadcastTimer);
@@ -83,12 +66,9 @@ class Discovery extends EventEmitter {
     this.devices.clear();
   }
 
-  /** Return current device list as array */
   getDevices() {
     return Array.from(this.devices.values());
   }
-
-  // ─── Private ─────────────────────────────────────────────────────────────
 
   _buildBeacon() {
     return JSON.stringify({
@@ -105,11 +85,21 @@ class Discovery extends EventEmitter {
     const send = () => {
       if (!this.socket || !this.running) return;
       const msg = Buffer.from(this._buildBeacon());
+
+      // 1. Broadcast global
       this.socket.send(msg, 0, msg.length, DISCOVERY_PORT, BROADCAST_ADDR, (err) => {
-        if (err) console.warn('[Discovery] Broadcast send error:', err.message);
+        if (err) console.warn('[Discovery] Broadcast 255.255.255.255 error:', err.message);
       });
+
+      // 2. Broadcast sou chak subnet aktif (fix Windows Firewall)
+      for (const addr of _getSubnetBroadcasts()) {
+        this.socket.send(msg, 0, msg.length, DISCOVERY_PORT, addr, (err) => {
+          if (err) console.warn(`[Discovery] Broadcast ${addr} error:`, err.message);
+        });
+      }
     };
-    send(); // immediate first broadcast
+
+    send();
     this._broadcastTimer = setInterval(send, BROADCAST_INTERVAL);
   }
 
@@ -131,11 +121,11 @@ class Discovery extends EventEmitter {
     try {
       packet = JSON.parse(msg.toString());
     } catch (_) {
-      return; // ignore malformed packets
+      return;
     }
 
     if (packet.type !== 'LANSHARE_BEACON') return;
-    if (packet.id === this.id) return;            // ignore own broadcasts
+    if (packet.id === this.id) return;
 
     const existing = this.devices.get(packet.id);
     const device = {
@@ -161,6 +151,33 @@ class Discovery extends EventEmitter {
 
 function _defaultName() {
   return `${os.userInfo().username}@${os.hostname()}`;
+}
+
+function _getSubnetBroadcasts() {
+  const results = [];
+  try {
+    const ifaces = os.networkInterfaces();
+    for (const name of Object.keys(ifaces)) {
+      for (const iface of ifaces[name]) {
+        if (iface.family !== 'IPv4' && iface.family !== 4) continue;
+        if (iface.internal)  continue;
+        if (!iface.netmask)  continue;
+
+        const ip   = iface.address.split('.').map(Number);
+        const mask = iface.netmask.split('.').map(Number);
+        const bc   = ip.map((b, i) => (b | (~mask[i] & 0xFF)));
+        const addr = bc.join('.');
+
+        if (addr !== '255.255.255.255') {
+          results.push(addr);
+          console.log(`[Discovery] Interface ${name}: ${iface.address} → broadcast ${addr}`);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[Discovery] _getSubnetBroadcasts error:', e.message);
+  }
+  return results;
 }
 
 module.exports = Discovery;
