@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     viewBox="0 0 500 500" width="500" height="500">
+  <defs>
+    <!-- Background gradient -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#0a0f1e"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+
+    <!-- Accent gradient pou layers -->
+    <linearGradient id="layerGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#60a5fa"/>
+    </linearGradient>
+
+    <!-- Glow filter -->
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="9" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Softer glow pou WiFi -->
+    <filter id="glowSoft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Clip pou kwen awondi -->
+    <clipPath id="roundClip">
+      <rect x="0" y="0" width="500" height="500" rx="90" ry="90"/>
+    </clipPath>
+  </defs>
+
+  <!-- ── Background ── -->
+  <rect x="0" y="0" width="500" height="500" rx="90" ry="90"
+        fill="url(#bgGrad)"/>
+
+  <!-- Subtle inner glow border -->
+  <rect x="5" y="5"
+        width="490" height="490"
+        rx="81" ry="81"
+        fill="none"
+        stroke="#3b82f6" stroke-opacity="0.18" stroke-width="4"/>
+
+  <!-- ── Layers (3 rektang empile) ── -->
+  <!-- Layer 3 (do, piti, pal) -->
+  <rect x="195" y="307.5"
+        width="110" height="50" rx="15" ry="15"
+        fill="#3b82f6" fill-opacity="0.35"
+        filter="url(#glow)"/>
+
+  <!-- Layer 2 (mitan) -->
+  <rect x="165" y="225"
+        width="170" height="50" rx="15" ry="15"
+        fill="#3b82f6" fill-opacity="0.65"
+        filter="url(#glow)"/>
+
+  <!-- Layer 1 (devan, gwo, plen) -->
+  <rect x="140" y="142.5"
+        width="220" height="50" rx="15" ry="15"
+        fill="url(#layerGrad)"
+        filter="url(#glow)"/>
+
+  <!-- ── WiFi arcs ── -->
+  <!-- Ark 3 (gwo, pal) -->
+  <path d="M 151.70175468532096 281.1708276378745 A 120 120 0 0 1 348.298245314679 281.1708276378744"
+        fill="none" stroke="#3b82f6" stroke-opacity="0.3"
+        stroke-width="16" stroke-linecap="round"
+        filter="url(#glowSoft)"/>
+
+  <!-- Ark 2 (mwayen) -->
+  <path d="M 180.37207623543569 301.2460029101611 A 85 85 0 0 1 319.6279237645643 301.24600291016105"
+        fill="none" stroke="#3b82f6" stroke-opacity="0.6"
+        stroke-width="16" stroke-linecap="round"
+        filter="url(#glowSoft)"/>
+
+  <!-- Ark 1 (piti, plen) -->
+  <path d="M 209.0423977855504 321.32117818244774 A 50 50 0 0 1 290.9576022144496 321.3211781824477"
+        fill="none" stroke="url(#layerGrad)"
+        stroke-width="16" stroke-linecap="round"
+        filter="url(#glowSoft)"/>
+
+  <!-- Dot WiFi -->
+  <circle cx="250" cy="358" r="19"
+          fill="url(#layerGrad)"
+          filter="url(#glow)"/>
+
+  <!-- ── Lejann tèks (opsyonèl, sèlman si size >= 200) ── -->
+  
+  <text x="250" y="470"
+        font-family="'Space Grotesk', 'Helvetica Neue', Arial, sans-serif"
+        font-size="37.5" font-weight="700"
+        fill="#f1f5f9" fill-opacity="0.55"
+        text-anchor="middle" letter-spacing="4">LAN SHARE</text>
+  
+</svg>

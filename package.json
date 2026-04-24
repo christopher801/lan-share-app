@@ -1,0 +1,68 @@
+{
+  "name": "lan-share",
+  "version": "1.0.0",
+  "description": "Cross-platform LAN file sharing app — like AirDrop for your local network",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "keywords": [
+    "lan",
+    "file-sharing",
+    "electron",
+    "p2p"
+  ],
+  "author": "LAN Share",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.lanshare.app",
+    "productName": "LAN Share",
+    "icon": "assets/icons/icon",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "network/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icons/icon.ico"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icons/icon.png",
+      "category": "Network"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  },
+  "dependencies": {
+    "canvas": "^3.2.3"
+  }
+}

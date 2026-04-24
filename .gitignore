@@ -1,0 +1,105 @@
+# ─── Node.js ────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm
+.yarn-integrity
+package-lock.json
+yarn.lock
+
+# ─── Electron Build Output ───────────────────────────────────────
+dist/
+out/
+build/
+release/
+*.AppImage
+*.exe
+*.deb
+*.rpm
+*.snap
+*.dmg
+*.pkg
+
+# ─── Electron Cache ──────────────────────────────────────────────
+.electron/
+electron-builder-cache/
+~/.electron-builder/
+
+# ─── Environment & Secrets ───────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+
+# ─── OS Files ────────────────────────────────────────────────────
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# ─── Logs ────────────────────────────────────────────────────────
+logs/
+*.log
+crash-reports/
+
+# ─── IDE & Editors ───────────────────────────────────────────────
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.project
+.classpath
+.settings/
+*.iml
+*.ipr
+*.iws
+
+# ─── Generated Assets (re-jenere ak: node generate-assets.js) ────
+# Kòmante liy sa yo si ou vle commit icons yo dirèkteman
+assets/icons/icon_*.png
+assets/icons/icon.ico
+assets/icons/icon.icns
+assets/icons/manifest.json
+# Gade icon.svg ak icon.png (512px) — yo piti epi itil pou GitHub
+!assets/icons/icon.svg
+!assets/icons/icon.png
+
+# ─── Temp & Cache ─────────────────────────────────────────────────
+tmp/
+temp/
+.cache/
+.parcel-cache/
+.turbo/
+
+# ─── LAN Share specific ───────────────────────────────────────────
+# Dosye Download lokal (pa push fichye resevwa yo)
+"LAN Share Downloads"/

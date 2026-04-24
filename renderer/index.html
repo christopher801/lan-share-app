@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self'" />
+  <title>LAN Share</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── Titlebar ─────────────────────────────────────────────────── -->
+  <header class="titlebar">
+    <div class="titlebar-drag"></div>
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 24 24" fill="none">
+        <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+      </svg>
+      LAN Share
+    </div>
+    <div class="device-badge" id="myDeviceBadge">
+      <span class="status-dot"></span>
+      <span id="myDeviceName">Initializing…</span>
+    </div>
+  </header>
+
+  <!-- ── Main layout ──────────────────────────────────────────────── -->
+  <main class="layout">
+
+    <!-- Left: device discovery panel -->
+    <section class="panel panel-devices">
+      <div class="panel-header">
+        <h2>Nearby Devices</h2>
+        <span class="device-count" id="deviceCount">0</span>
+      </div>
+      <div class="scan-line"></div>
+
+      <div class="device-list" id="deviceList">
+        <div class="empty-state" id="emptyState">
+          <div class="radar">
+            <div class="radar-ring r1"></div>
+            <div class="radar-ring r2"></div>
+            <div class="radar-ring r3"></div>
+            <div class="radar-dot"></div>
+          </div>
+          <p>Scanning for devices…</p>
+          <small>Other LAN Share instances on the same WiFi will appear here automatically.</small>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: send panel -->
+    <section class="panel panel-send" id="sendPanel">
+      <div class="no-device-selected" id="noDeviceSelected">
+        <svg viewBox="0 0 24 24" fill="none" width="48" height="48">
+          <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 12 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <p>Select a device from the left panel to start a transfer.</p>
+      </div>
+
+      <!-- Send UI (shown when device selected) -->
+      <div class="send-ui" id="sendUI" style="display:none">
+        <div class="target-device">
+          <div class="target-avatar" id="targetAvatar"></div>
+          <div class="target-info">
+            <h3 id="targetName">—</h3>
+            <span id="targetAddress" class="mono">—</span>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="btnDeselect">✕</button>
+        </div>
+
+        <!-- File drop zone -->
+        <div class="drop-zone" id="dropZone">
+          <input type="file" id="fileInput" multiple style="display:none" />
+          <div class="drop-zone-inner" id="dropZoneInner">
+            <svg viewBox="0 0 24 24" fill="none" width="36" height="36">
+              <path d="M12 15V3m0 12l-4-4m4 4l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M2 17l.621 2.485A2 2 0 004.561 21h14.878a2 2 0 001.94-1.515L22 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <p>Drop files here</p>
+            <small>or</small>
+            <button class="btn btn-outline" id="btnPickFiles">Browse Files</button>
+          </div>
+        </div>
+
+        <!-- Selected files list -->
+        <div class="file-list" id="fileList" style="display:none">
+          <div class="file-list-header">
+            <span id="fileCountLabel">0 files</span>
+            <button class="btn btn-ghost btn-xs" id="btnClearFiles">Clear</button>
+          </div>
+          <div id="fileItems"></div>
+        </div>
+
+        <!-- PIN input row -->
+        <div class="pin-row" id="pinRow" style="display:none">
+          <label>Enter PIN shown on receiver</label>
+          <div class="pin-inputs">
+            <input class="pin-digit" maxlength="1" inputmode="numeric" pattern="[0-9]" />
+            <input class="pin-digit" maxlength="1" inputmode="numeric" pattern="[0-9]" />
+            <input class="pin-digit" maxlength="1" inputmode="numeric" pattern="[0-9]" />
+            <input class="pin-digit" maxlength="1" inputmode="numeric" pattern="[0-9]" />
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="action-row">
+          <button class="btn btn-primary" id="btnSend" disabled>
+            <svg viewBox="0 0 24 24" fill="none" width="16" height="16">
+              <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Send Files
+          </button>
+          <button class="btn btn-danger" id="btnCancel" style="display:none">Cancel</button>
+        </div>
+
+        <!-- Transfer progress -->
+        <div class="transfer-progress" id="transferProgress" style="display:none">
+          <div class="progress-header">
+            <span id="progressLabel">Preparing…</span>
+            <span id="progressPct" class="mono">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <div class="progress-meta">
+            <span id="progressBytes" class="mono">0 B / 0 B</span>
+            <span id="progressFile" class="mono"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ── Overlays ──────────────────────────────────────────────────── -->
+
+  <!-- Incoming connection request modal -->
+  <div class="overlay" id="overlayIncoming" style="display:none">
+    <div class="modal">
+      <div class="modal-icon modal-icon--request">
+        <svg viewBox="0 0 24 24" fill="none" width="28" height="28">
+          <path d="M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zM6 1v3M10 1v3M14 1v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h3>Incoming Request</h3>
+      <p><strong id="requestPeerName">Unknown</strong> wants to send you files.</p>
+      <p class="mono small" id="requestPeerAddress"></p>
+      <div class="modal-actions">
+        <button class="btn btn-danger"   id="btnReject">Reject</button>
+        <button class="btn btn-primary"  id="btnAccept">Accept</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Show PIN modal (receiver) -->
+  <div class="overlay" id="overlayPin" style="display:none">
+    <div class="modal">
+      <div class="modal-icon modal-icon--pin">
+        <svg viewBox="0 0 24 24" fill="none" width="28" height="28">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <h3>Share this PIN</h3>
+      <p>Tell <strong id="pinPeerName">the sender</strong> to enter this PIN:</p>
+      <div class="pin-display" id="pinDisplay">——</div>
+      <p class="small muted">PIN expires when the transfer starts or is cancelled.</p>
+      <button class="btn btn-ghost" id="btnDismissPin">Dismiss</button>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div class="toast-stack" id="toastStack"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
