@@ -1,82 +1,62 @@
 /**
- * app.js — Renderer process
- * Handles all UI interactions and bridges to the main process via window.lanShare.
+ * app.js — Renderer
+ * Flou Zender-style: wè aparèy → chwazi fichye → voye → resevwa aksepte → fini
+ * Pa gen PIN, pa gen etap siplemantè.
  */
 
 'use strict';
 
-// ═══════════════════════════════════════════════════════════════
-// State
-// ═══════════════════════════════════════════════════════════════
-
 const state = {
-  myId:        null,
-  myName:      null,
-  devices:     new Map(),          // id → device object
-  selectedId:  null,
-  files:       [],                 // File paths selected to send
+  myId:         null,
+  myName:       null,
+  devices:      new Map(),
+  selectedId:   null,
+  files:        [],
   transferring: false,
-  currentPeerId: null,             // Peer for pending accept/reject
+  currentPeerId: null,
 };
-
-// ═══════════════════════════════════════════════════════════════
-// DOM refs
-// ═══════════════════════════════════════════════════════════════
 
 const $ = (id) => document.getElementById(id);
 
 const DOM = {
-  myDeviceName:    $('myDeviceName'),
-  deviceList:      $('deviceList'),
-  deviceCount:     $('deviceCount'),
-  emptyState:      $('emptyState'),
+  myDeviceName:     $('myDeviceName'),
+  deviceList:       $('deviceList'),
+  deviceCount:      $('deviceCount'),
+  emptyState:       $('emptyState'),
 
-  // Send panel
-  noDeviceSelected:$('noDeviceSelected'),
-  sendUI:          $('sendUI'),
-  targetAvatar:    $('targetAvatar'),
-  targetName:      $('targetName'),
-  targetAddress:   $('targetAddress'),
-  btnDeselect:     $('btnDeselect'),
+  noDeviceSelected: $('noDeviceSelected'),
+  sendUI:           $('sendUI'),
+  targetAvatar:     $('targetAvatar'),
+  targetName:       $('targetName'),
+  targetAddress:    $('targetAddress'),
+  btnDeselect:      $('btnDeselect'),
 
-  // File zone
-  dropZone:        $('dropZone'),
-  fileInput:       $('fileInput'),
-  fileList:        $('fileList'),
-  fileItems:       $('fileItems'),
-  fileCountLabel:  $('fileCountLabel'),
-  btnPickFiles:    $('btnPickFiles'),
-  btnClearFiles:   $('btnClearFiles'),
+  dropZone:         $('dropZone'),
+  fileInput:        $('fileInput'),
+  fileList:         $('fileList'),
+  fileItems:        $('fileItems'),
+  fileCountLabel:   $('fileCountLabel'),
+  btnPickFiles:     $('btnPickFiles'),
+  btnClearFiles:    $('btnClearFiles'),
 
-  // PIN
-  pinRow:          $('pinRow'),
-  pinDigits:       Array.from(document.querySelectorAll('.pin-digit')),
+  btnSend:          $('btnSend'),
+  btnCancel:        $('btnCancel'),
 
-  // Actions
-  btnSend:         $('btnSend'),
-  btnCancel:       $('btnCancel'),
+  transferProgress: $('transferProgress'),
+  progressLabel:    $('progressLabel'),
+  progressPct:      $('progressPct'),
+  progressFill:     $('progressFill'),
+  progressBytes:    $('progressBytes'),
+  progressFile:     $('progressFile'),
 
-  // Progress
-  transferProgress:$('transferProgress'),
-  progressLabel:   $('progressLabel'),
-  progressPct:     $('progressPct'),
-  progressFill:    $('progressFill'),
-  progressBytes:   $('progressBytes'),
-  progressFile:    $('progressFile'),
-
-  // Overlays
-  overlayIncoming: $('overlayIncoming'),
-  requestPeerName: $('requestPeerName'),
+  overlayIncoming:  $('overlayIncoming'),
+  requestPeerName:  $('requestPeerName'),
   requestPeerAddress: $('requestPeerAddress'),
-  btnAccept:       $('btnAccept'),
-  btnReject:       $('btnReject'),
+  fileSummary:      $('fileSummary'),
+  btnAccept:        $('btnAccept'),
+  btnReject:        $('btnReject'),
 
-  overlayPin:      $('overlayPin'),
-  pinPeerName:     $('pinPeerName'),
-  pinDisplay:      $('pinDisplay'),
-  btnDismissPin:   $('btnDismissPin'),
-
-  toastStack:      $('toastStack'),
+  toastStack:       $('toastStack'),
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -88,13 +68,12 @@ async function init() {
   state.myId   = info.id;
   state.myName = info.name;
   DOM.myDeviceName.textContent = info.name;
-
   registerIPCListeners();
   registerUIHandlers();
 }
 
 // ═══════════════════════════════════════════════════════════════
-// IPC listeners (main → renderer)
+// IPC listeners
 // ═══════════════════════════════════════════════════════════════
 
 function registerIPCListeners() {
@@ -102,174 +81,137 @@ function registerIPCListeners() {
   window.lanShare.onDeviceFound((device) => {
     state.devices.set(device.id, device);
     renderDeviceList();
-    toast(`${device.name} joined the network`, 'info');
+    toast(`${device.name} sou rezo a`, 'info');
   });
 
   window.lanShare.onDeviceUpdated((device) => {
     state.devices.set(device.id, device);
-    // Update address silently
   });
 
   window.lanShare.onDeviceLost((id) => {
     const d = state.devices.get(id);
-    if (d) toast(`${d.name} left the network`, 'info');
+    if (d) toast(`${d.name} kite rezo a`, 'info');
     state.devices.delete(id);
     if (state.selectedId === id) deselectDevice();
     renderDeviceList();
   });
 
-  // ── Incoming request ─────────────────────────────────────────
-  window.lanShare.onIncomingRequest(({ peerId, peerName, peerAddress }) => {
+  // ── Demann antran (resevwa) ────────────────────────────────────
+  window.lanShare.onIncomingRequest(({ peerId, peerName, peerAddress, fileCount, totalSize, files }) => {
     state.currentPeerId = peerId;
     DOM.requestPeerName.textContent    = peerName;
     DOM.requestPeerAddress.textContent = peerAddress;
-    DOM.overlayIncoming.style.display  = 'flex';
+
+    // Montre lis fichye nan modal
+    DOM.fileSummary.innerHTML = '';
+    if (files && files.length) {
+      files.forEach(f => {
+        const row = document.createElement('div');
+        row.className = 'summary-row';
+        row.innerHTML = `
+          <span>${fileIcon(f.name.split('.').pop().toLowerCase())} ${escapeHtml(f.name)}</span>
+          <span class="mono muted">${formatBytes(f.size)}</span>
+        `;
+        DOM.fileSummary.appendChild(row);
+      });
+    }
+
+    // Total
+    const total = document.createElement('div');
+    total.className = 'summary-total';
+    total.innerHTML = `<span>${fileCount} fichye</span><span class="mono">${formatBytes(totalSize)}</span>`;
+    DOM.fileSummary.appendChild(total);
+
+    DOM.overlayIncoming.style.display = 'flex';
   });
 
-  // ── Show PIN (receiver side) ──────────────────────────────────
-  window.lanShare.onShowPin(({ peerId, peerName, pin }) => {
-    DOM.overlayIncoming.style.display = 'none'; // close request modal
-    DOM.pinPeerName.textContent  = peerName;
-    DOM.pinDisplay.textContent   = pin;
-    DOM.overlayPin.style.display = 'flex';
-  });
-
-  // ── Transfer events ───────────────────────────────────────────
+  // ── Transfè ────────────────────────────────────────────────────
   window.lanShare.onTransferStart(({ peerId, peerName }) => {
-    DOM.overlayPin.style.display = 'none';
     state.transferring = true;
+    DOM.overlayIncoming.style.display = 'none';
     showProgress(true);
-    DOM.progressLabel.textContent = peerName
-      ? `Receiving from ${peerName}…`
-      : `Sending…`;
+    DOM.progressLabel.textContent = peerName ? `Ap resevwa depi ${peerName}…` : `Ap voye…`;
     DOM.btnCancel.style.display = 'inline-flex';
     DOM.btnSend.style.display   = 'none';
-    toast('Transfer started', 'info');
   });
 
-  window.lanShare.onProgress(({ peerId, fileIdx, filename, received, total }) => {
-    const pct  = total > 0 ? Math.round((received / total) * 100) : 0;
-    DOM.progressFill.style.width    = `${pct}%`;
-    DOM.progressPct.textContent     = `${pct}%`;
-    DOM.progressBytes.textContent   = `${formatBytes(received)} / ${formatBytes(total)}`;
-    DOM.progressFile.textContent    = filename;
-    DOM.progressLabel.textContent   = `File ${fileIdx + 1}: ${filename}`;
+  window.lanShare.onProgress(({ fileIdx, filename, received, total }) => {
+    const pct = total > 0 ? Math.round((received / total) * 100) : 0;
+    DOM.progressFill.style.width  = `${pct}%`;
+    DOM.progressPct.textContent   = `${pct}%`;
+    DOM.progressBytes.textContent = `${formatBytes(received)} / ${formatBytes(total)}`;
+    DOM.progressFile.textContent  = filename;
+    DOM.progressLabel.textContent = `Fichye ${fileIdx + 1}: ${filename}`;
   });
 
-  window.lanShare.onTransferComplete(({ peerId, downloadDir }) => {
+  window.lanShare.onTransferComplete(({ downloadDir }) => {
     state.transferring = false;
     showProgress(false);
     resetSendUI();
-    toast(
-      downloadDir
-        ? `Files saved to LAN Share Downloads`
-        : 'Files sent successfully!',
-      'success'
-    );
     if (downloadDir) {
-      // Offer to open folder
-      const t = createToast('📂 Click to open Downloads folder', 'info', 6000);
+      toast('✅ Fichye resevwa!', 'success');
+      const t = createToast('📂 Klike pou ouvri dosye a', 'info', 7000);
       t.style.cursor = 'pointer';
       t.addEventListener('click', () => window.lanShare.openDownloadDir());
+    } else {
+      toast('✅ Fichye voye avèk siksè!', 'success');
     }
   });
 
-  window.lanShare.onTransferCancelled(({ peerId }) => {
+  window.lanShare.onTransferCancelled(() => {
     state.transferring = false;
     showProgress(false);
     resetSendUI();
-    toast('Transfer cancelled', 'error');
+    toast('Transfè anile', 'error');
   });
 
-  window.lanShare.onTransferError(({ peerId, message }) => {
+  window.lanShare.onTransferError(({ message }) => {
     state.transferring = false;
     showProgress(false);
     resetSendUI();
-    toast(`Transfer failed: ${message}`, 'error');
+    toast(`Erè: ${message}`, 'error');
   });
 }
 
 // ═══════════════════════════════════════════════════════════════
-// UI event handlers
+// UI handlers
 // ═══════════════════════════════════════════════════════════════
 
 function registerUIHandlers() {
 
-  // ── Deselect device ───────────────────────────────────────────
   DOM.btnDeselect.addEventListener('click', deselectDevice);
 
-  // ── File picker button ────────────────────────────────────────
   DOM.btnPickFiles.addEventListener('click', async () => {
     const paths = await window.lanShare.pickFiles();
     if (paths.length) addFiles(paths);
   });
 
-  DOM.fileInput.addEventListener('change', () => {
-    // We use the native OS picker via IPC; this input is for drag-drop label
-  });
-
   DOM.btnClearFiles.addEventListener('click', clearFiles);
 
-  // ── Drag & drop ───────────────────────────────────────────────
-  DOM.dropZone.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    DOM.dropZone.classList.add('drag-over');
-  });
-
-  DOM.dropZone.addEventListener('dragleave', () => {
-    DOM.dropZone.classList.remove('drag-over');
-  });
-
+  // Drag & drop
+  DOM.dropZone.addEventListener('dragover',  (e) => { e.preventDefault(); DOM.dropZone.classList.add('drag-over'); });
+  DOM.dropZone.addEventListener('dragleave', ()  => DOM.dropZone.classList.remove('drag-over'));
   DOM.dropZone.addEventListener('drop', (e) => {
     e.preventDefault();
     DOM.dropZone.classList.remove('drag-over');
-    const paths = Array.from(e.dataTransfer.files).map((f) => f.path);
+    const paths = Array.from(e.dataTransfer.files).map(f => f.path);
     if (paths.length) addFiles(paths);
   });
 
-  // ── PIN digits ────────────────────────────────────────────────
-  DOM.pinDigits.forEach((input, i) => {
-    input.addEventListener('input', () => {
-      input.value = input.value.replace(/\D/g, '').slice(-1);
-      if (input.value && i < 3) DOM.pinDigits[i + 1].focus();
-      updateSendButton();
-    });
-
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Backspace' && !input.value && i > 0) {
-        DOM.pinDigits[i - 1].focus();
-      }
-    });
-
-    input.addEventListener('paste', (e) => {
-      e.preventDefault();
-      const text = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
-      if (text.length === 4) {
-        DOM.pinDigits.forEach((d, j) => { d.value = text[j] || ''; });
-        DOM.pinDigits[3].focus();
-        updateSendButton();
-      }
-    });
-  });
-
-  // ── Send ──────────────────────────────────────────────────────
+  // Voye — san PIN
   DOM.btnSend.addEventListener('click', async () => {
-    if (!state.selectedId || !state.files.length) return;
-
-    const pin = DOM.pinDigits.map((d) => d.value).join('');
-    if (pin.length !== 4) { toast('Please enter the full 4-digit PIN', 'error'); return; }
+    if (!state.selectedId || !state.files.length || state.transferring) return;
 
     DOM.btnSend.disabled = true;
     state.transferring   = true;
     showProgress(true);
-    DOM.btnCancel.style.display = 'inline-flex';
-    DOM.progressLabel.textContent = 'Connecting…';
+    DOM.progressLabel.textContent = 'Ap konekte…';
+    DOM.btnCancel.style.display   = 'inline-flex';
 
     try {
-      await window.lanShare.sendFiles(state.selectedId, state.files, pin);
+      await window.lanShare.sendFiles(state.selectedId, state.files);
     } catch (err) {
-      // Errors are surfaced via onTransferError IPC too, but handle locally too
-      toast(`Error: ${err.message}`, 'error');
+      toast(`Erè: ${err.message}`, 'error');
       state.transferring = false;
       showProgress(false);
       DOM.btnSend.disabled = false;
@@ -277,13 +219,12 @@ function registerUIHandlers() {
     }
   });
 
-  // ── Cancel ────────────────────────────────────────────────────
   DOM.btnCancel.addEventListener('click', () => {
     if (state.selectedId) window.lanShare.cancelTransfer(state.selectedId);
     DOM.btnCancel.style.display = 'none';
   });
 
-  // ── Accept incoming ───────────────────────────────────────────
+  // Modal aksepte/rejte
   DOM.btnAccept.addEventListener('click', () => {
     if (!state.currentPeerId) return;
     window.lanShare.acceptConnection(state.currentPeerId);
@@ -294,17 +235,12 @@ function registerUIHandlers() {
     if (!state.currentPeerId) return;
     window.lanShare.rejectConnection(state.currentPeerId);
     DOM.overlayIncoming.style.display = 'none';
-    toast('Connection rejected', 'info');
-  });
-
-  // ── Dismiss PIN display ───────────────────────────────────────
-  DOM.btnDismissPin.addEventListener('click', () => {
-    DOM.overlayPin.style.display = 'none';
+    toast('Koneksyon rejte', 'info');
   });
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Device list rendering
+// Device list
 // ═══════════════════════════════════════════════════════════════
 
 function renderDeviceList() {
@@ -313,52 +249,39 @@ function renderDeviceList() {
 
   if (devices.length === 0) {
     DOM.emptyState.style.display = 'flex';
-    // Remove any device cards
-    Array.from(DOM.deviceList.querySelectorAll('.device-card')).forEach(el => el.remove());
+    DOM.deviceList.querySelectorAll('.device-card').forEach(el => el.remove());
     return;
   }
-
   DOM.emptyState.style.display = 'none';
 
-  // Build a set of current ids
   const existing = new Set(
     Array.from(DOM.deviceList.querySelectorAll('.device-card')).map(el => el.dataset.id)
   );
 
-  // Add new ones
-  devices.forEach((device) => {
+  devices.forEach(device => {
     if (!existing.has(device.id)) {
-      const card = buildDeviceCard(device);
-      DOM.deviceList.appendChild(card);
-    } else {
-      // Update name/address on existing card
-      const card = DOM.deviceList.querySelector(`.device-card[data-id="${device.id}"]`);
-      if (card) {
-        card.querySelector('small').textContent = device.address;
-      }
+      DOM.deviceList.appendChild(buildDeviceCard(device));
     }
   });
 
-  // Remove gone ones
-  existing.forEach((id) => {
+  existing.forEach(id => {
     if (!state.devices.has(id)) {
-      const el = DOM.deviceList.querySelector(`.device-card[data-id="${id}"]`);
-      if (el) el.remove();
+      DOM.deviceList.querySelector(`.device-card[data-id="${id}"]`)?.remove();
     }
   });
 }
 
 function buildDeviceCard(device) {
   const card = document.createElement('div');
-  card.className = 'device-card';
+  card.className  = 'device-card';
   card.dataset.id = device.id;
   if (state.selectedId === device.id) card.classList.add('selected');
 
-  const { bg, emoji } = avatarStyle(device.name);
+  const { bg, initials } = avatarStyle(device.name);
   const platform = platformIcon(device.platform);
 
   card.innerHTML = `
-    <div class="device-avatar" style="background:${bg}">${emoji}</div>
+    <div class="device-avatar" style="background:${bg}">${initials}</div>
     <div class="device-info">
       <strong>${escapeHtml(device.name)}</strong>
       <small>${device.address}</small>
@@ -376,24 +299,18 @@ function buildDeviceCard(device) {
 
 function selectDevice(device) {
   state.selectedId = device.id;
-
-  // Update cards
-  DOM.deviceList.querySelectorAll('.device-card').forEach((c) => {
+  DOM.deviceList.querySelectorAll('.device-card').forEach(c => {
     c.classList.toggle('selected', c.dataset.id === device.id);
   });
 
-  // Show send UI
   DOM.noDeviceSelected.style.display = 'none';
   DOM.sendUI.style.display           = 'flex';
 
-  const { bg, emoji } = avatarStyle(device.name);
+  const { bg, initials } = avatarStyle(device.name);
   DOM.targetAvatar.style.background = bg;
-  DOM.targetAvatar.textContent      = emoji;
+  DOM.targetAvatar.textContent      = initials;
   DOM.targetName.textContent        = device.name;
   DOM.targetAddress.textContent     = `${device.address}:${device.tcpPort}`;
-
-  // Show PIN row
-  DOM.pinRow.style.display = 'flex';
 
   updateSendButton();
 }
@@ -410,11 +327,9 @@ function deselectDevice() {
 // ═══════════════════════════════════════════════════════════════
 
 function addFiles(paths) {
-  // Deduplicate
   const existing = new Set(state.files);
   paths.forEach(p => existing.add(p));
   state.files = Array.from(existing);
-
   renderFileList();
   updateSendButton();
 }
@@ -426,26 +341,24 @@ function clearFiles() {
 }
 
 function renderFileList() {
-  if (state.files.length === 0) {
+  if (!state.files.length) {
     DOM.fileList.style.display = 'none';
     return;
   }
+  DOM.fileList.style.display     = 'block';
+  DOM.fileCountLabel.textContent = `${state.files.length} fichye`;
+  DOM.fileItems.innerHTML        = '';
 
-  DOM.fileList.style.display   = 'block';
-  DOM.fileCountLabel.textContent = `${state.files.length} file${state.files.length > 1 ? 's' : ''}`;
-  DOM.fileItems.innerHTML = '';
-
-  state.files.forEach((fp) => {
+  state.files.forEach(fp => {
     const name = fp.split(/[\\/]/).pop();
     const ext  = name.split('.').pop().toLowerCase();
-    const icon = fileIcon(ext);
     const div  = document.createElement('div');
     div.className = 'file-item';
     div.innerHTML = `
-      <span class="file-icon">${icon}</span>
+      <span class="file-icon">${fileIcon(ext)}</span>
       <div class="file-meta">
         <strong title="${escapeHtml(fp)}">${escapeHtml(name)}</strong>
-        <small class="mono">${escapeHtml(fp)}</small>
+        <small class="mono muted">${escapeHtml(fp)}</small>
       </div>
     `;
     DOM.fileItems.appendChild(div);
@@ -457,9 +370,7 @@ function renderFileList() {
 // ═══════════════════════════════════════════════════════════════
 
 function updateSendButton() {
-  const pin    = DOM.pinDigits.map(d => d.value).join('');
-  const ready  = state.selectedId && state.files.length > 0 && pin.length === 4 && !state.transferring;
-  DOM.btnSend.disabled = !ready;
+  DOM.btnSend.disabled = !(state.selectedId && state.files.length > 0 && !state.transferring);
 }
 
 function showProgress(show) {
@@ -469,7 +380,7 @@ function showProgress(show) {
     DOM.progressPct.textContent   = '0%';
     DOM.progressBytes.textContent = '';
     DOM.progressFile.textContent  = '';
-    DOM.progressLabel.textContent = 'Preparing…';
+    DOM.progressLabel.textContent = 'Ap prepare…';
   }
 }
 
@@ -478,15 +389,13 @@ function resetSendUI() {
   DOM.btnSend.disabled        = true;
   DOM.btnCancel.style.display = 'none';
   clearFiles();
-  DOM.pinDigits.forEach(d => d.value = '');
   updateSendButton();
 }
 
-// ── Toast ──────────────────────────────────────────────────────
-
+// Toasts
 function createToast(msg, type = 'info', duration = 3500) {
   const el = document.createElement('div');
-  el.className = `toast toast-${type}`;
+  el.className   = `toast toast-${type}`;
   el.textContent = msg;
   DOM.toastStack.appendChild(el);
   setTimeout(() => {
@@ -495,35 +404,31 @@ function createToast(msg, type = 'info', duration = 3500) {
   }, duration);
   return el;
 }
+function toast(msg, type = 'info', dur = 3500) { createToast(msg, type, dur); }
 
-function toast(msg, type = 'info', duration = 3500) {
-  createToast(msg, type, duration);
-}
-
-// ── Formatting ──────────────────────────────────────────────────
-
+// Formatting
 function formatBytes(bytes) {
-  if (bytes === 0) return '0 B';
+  if (!bytes || bytes === 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
 }
 
 function escapeHtml(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── Visual helpers ──────────────────────────────────────────────
-
-const AVATAR_COLORS = [
-  ['#1e3a5f','💻'],['#1a3a2e','🖥️'],['#3a1e5f','🖱️'],
-  ['#5f3a1e','📱'],['#1e5f3a','⌨️'],['#5f1e3a','🖨️'],
-];
-
+// Initials pou avatar (tankou Zender)
 function avatarStyle(name) {
-  const idx  = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR_COLORS.length;
-  const [bg, emoji] = AVATAR_COLORS[idx];
-  return { bg, emoji };
+  const colors = ['#1e3a8a','#065f46','#4c1d95','#7c2d12','#164e63','#1e1b4b'];
+  const idx    = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % colors.length;
+  const parts  = name.trim().split(/\s+/);
+  const initials = parts.length >= 2
+    ? (parts[0][0] + parts[1][0]).toUpperCase()
+    : name.slice(0, 2).toUpperCase();
+  return { bg: colors[idx], initials };
 }
 
 function platformIcon(platform) {
@@ -534,22 +439,19 @@ function platformIcon(platform) {
 
 function fileIcon(ext) {
   const map = {
-    jpg:'🖼️', jpeg:'🖼️', png:'🖼️', gif:'🖼️', webp:'🖼️', svg:'🖼️',
-    mp4:'🎬', mkv:'🎬', mov:'🎬', avi:'🎬',
-    mp3:'🎵', wav:'🎵', flac:'🎵', ogg:'🎵',
-    pdf:'📄', doc:'📝', docx:'📝', xls:'📊', xlsx:'📊', ppt:'📋', pptx:'📋',
-    zip:'🗜️', rar:'🗜️', tar:'🗜️', gz:'🗜️', '7z':'🗜️',
-    js:'🟨', ts:'🔷', py:'🐍', html:'🌐', css:'🎨', json:'📋',
-    txt:'📃', md:'📃',
+    jpg:'🖼️',jpeg:'🖼️',png:'🖼️',gif:'🖼️',webp:'🖼️',svg:'🖼️',
+    mp4:'🎬',mkv:'🎬',mov:'🎬',avi:'🎬',
+    mp3:'🎵',wav:'🎵',flac:'🎵',ogg:'🎵',
+    pdf:'📄',doc:'📝',docx:'📝',xls:'📊',xlsx:'📊',ppt:'📋',pptx:'📋',
+    zip:'🗜️',rar:'🗜️',tar:'🗜️',gz:'🗜️','7z':'🗜️',
+    js:'🟨',ts:'🔷',py:'🐍',html:'🌐',css:'🎨',json:'📋',
+    txt:'📃',md:'📃',
   };
   return map[ext] || '📁';
 }
 
-// ═══════════════════════════════════════════════════════════════
 // Bootstrap
-// ═══════════════════════════════════════════════════════════════
-
-init().catch((err) => {
+init().catch(err => {
   console.error('Init failed:', err);
-  toast('Initialization error: ' + err.message, 'error');
+  toast('Erè: ' + err.message, 'error');
 });

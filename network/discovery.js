@@ -1,33 +1,49 @@
 /**
- * discovery.js — FIXED VERSION
- * Timeout 30s + multi-interface broadcast (fix Windows Firewall)
+ * discovery.js
+ * UDP broadcast discovery — finds other LAN Share peers on the local network.
+ *
+ * Protocol:
+ *   Every peer broadcasts a JSON beacon every BROADCAST_INTERVAL ms on
+ *   UDP port DISCOVERY_PORT (bound to 0.0.0.0 to receive broadcasts too).
+ *
+ *   Beacon format:
+ *   { type: 'LANSHARE_BEACON', id, name, tcpPort, platform, version }
+ *
+ *   Any peer that receives a beacon (from a different id) adds/updates it
+ *   in the device registry and emits 'device-found' or 'device-updated'.
+ *
+ *   Devices that haven't sent a beacon for TIMEOUT_MS are considered gone
+ *   and 'device-lost' is emitted.
  */
 
-const dgram        = require('dgram');
-const os           = require('os');
+const dgram    = require('dgram');
+const os       = require('os');
 const EventEmitter = require('events');
 const { generateSessionId } = require('./encryption');
 
-const DISCOVERY_PORT     = 45678;
+const DISCOVERY_PORT     = 45678;       // UDP port for discovery beacons
 const BROADCAST_ADDR     = '255.255.255.255';
-const BROADCAST_INTERVAL = 3_000;
-const TIMEOUT_MS         = 30_000;   // ← 10_000 → 30_000
+const BROADCAST_INTERVAL = 3_000;       // ms between beacons
+const TIMEOUT_MS         = 30_000;      // 30s — beacon chak 3s, marge x10
 const APP_VERSION        = '1.0.0';
 
 class Discovery extends EventEmitter {
   constructor(deviceName, tcpPort) {
     super();
-    this.id       = generateSessionId();
-    this.name     = deviceName || _defaultName();
+
+    this.id       = generateSessionId();          // unique per app launch
+    this.name     = deviceName || _defaultName(); // human-readable label
     this.tcpPort  = tcpPort;
     this.platform = process.platform;
-    this.devices  = new Map();
+
+    this.devices  = new Map();  // id → { id, name, address, tcpPort, platform, lastSeen }
     this.socket   = null;
     this._broadcastTimer = null;
     this._cleanupTimer   = null;
     this.running  = false;
   }
 
+  /** Start listening + broadcasting */
   start() {
     if (this.running) return;
     this.running = true;
@@ -55,6 +71,7 @@ class Discovery extends EventEmitter {
     });
   }
 
+  /** Stop everything */
   stop() {
     this.running = false;
     clearInterval(this._broadcastTimer);
@@ -66,9 +83,12 @@ class Discovery extends EventEmitter {
     this.devices.clear();
   }
 
+  /** Return current device list as array */
   getDevices() {
     return Array.from(this.devices.values());
   }
+
+  // ─── Private ─────────────────────────────────────────────────────────────
 
   _buildBeacon() {
     return JSON.stringify({
@@ -86,12 +106,14 @@ class Discovery extends EventEmitter {
       if (!this.socket || !this.running) return;
       const msg = Buffer.from(this._buildBeacon());
 
-      // 1. Broadcast global
+      // 1. Broadcast global — 255.255.255.255
       this.socket.send(msg, 0, msg.length, DISCOVERY_PORT, BROADCAST_ADDR, (err) => {
         if (err) console.warn('[Discovery] Broadcast 255.255.255.255 error:', err.message);
       });
 
-      // 2. Broadcast sou chak subnet aktif (fix Windows Firewall)
+      // 2. Broadcast sou chak subnet aktif apa
+      //    Windows Firewall bloke 255.255.255.255 souvan,
+      //    men li kite subnet broadcast pase (ex: 192.168.1.255)
       for (const addr of _getSubnetBroadcasts()) {
         this.socket.send(msg, 0, msg.length, DISCOVERY_PORT, addr, (err) => {
           if (err) console.warn(`[Discovery] Broadcast ${addr} error:`, err.message);
@@ -99,7 +121,7 @@ class Discovery extends EventEmitter {
       }
     };
 
-    send();
+    send(); // premye broadcast imedyatman
     this._broadcastTimer = setInterval(send, BROADCAST_INTERVAL);
   }
 
@@ -121,11 +143,11 @@ class Discovery extends EventEmitter {
     try {
       packet = JSON.parse(msg.toString());
     } catch (_) {
-      return;
+      return; // ignore malformed packets
     }
 
     if (packet.type !== 'LANSHARE_BEACON') return;
-    if (packet.id === this.id) return;
+    if (packet.id === this.id) return;            // ignore own broadcasts
 
     const existing = this.devices.get(packet.id);
     const device = {
@@ -153,6 +175,17 @@ function _defaultName() {
   return `${os.userInfo().username}@${os.hostname()}`;
 }
 
+module.exports = Discovery;
+
+/**
+ * Retounen lis adrès broadcast pou chak interface IPv4 aktif.
+ * Egzanp: 192.168.1.42 / mask 255.255.255.0  →  192.168.1.255
+ *
+ * Windows Firewall bloke 255.255.255.255 souvan,
+ * men subnet broadcast pase nòmalman.
+ *
+ * @returns {string[]}
+ */
 function _getSubnetBroadcasts() {
   const results = [];
   try {
@@ -179,5 +212,3 @@ function _getSubnetBroadcasts() {
   }
   return results;
 }
-
-module.exports = Discovery;

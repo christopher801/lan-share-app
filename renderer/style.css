@@ -679,3 +679,44 @@ html, body {
 .mono  { font-family: var(--font-mono); }
 .small { font-size: 12px; }
 .muted { color: var(--text-muted); }
+
+/* ── File summary nan modal ──────────────────────────────────── */
+.file-summary {
+  width: 100%;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin: 4px 0;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  gap: 12px;
+}
+
+.summary-row:last-of-type { border-bottom: none; }
+.summary-row span:first-child { 
+  flex: 1; 
+  white-space: nowrap; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+}
+
+.summary-total {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(59,130,246,0.08);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
